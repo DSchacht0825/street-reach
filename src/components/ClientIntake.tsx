@@ -10,12 +10,16 @@ import {
   MenuItem,
   Stack,
   CircularProgress,
-  Snackbar
+  Snackbar,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import {
   LocationOn as LocationIcon,
   Save as SaveIcon,
-  Person as PersonIcon
+  Person as PersonIcon,
+  Schedule as ScheduleIcon,
+  LocationOff as LocationOffIcon
 } from '@mui/icons-material';
 import { supabase, Client } from '../lib/supabase';
 import { format } from 'date-fns';
@@ -57,6 +61,11 @@ const ClientIntake: React.FC<ClientIntakeProps> = ({ user, onClientAdded }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  // Backdating functionality
+  const [useBackdating, setUseBackdating] = useState(false);
+  const [encounterDate, setEncounterDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [encounterTime, setEncounterTime] = useState(format(new Date(), 'HH:mm'));
 
   useEffect(() => {
     getCurrentLocation();
@@ -111,11 +120,17 @@ const ClientIntake: React.FC<ClientIntakeProps> = ({ user, onClientAdded }) => {
         throw new Error('First name and last name are required');
       }
 
+      // Create the encounter datetime from selected date/time or current time
+      const encounterDateTime = useBackdating
+        ? new Date(`${encounterDate}T${encounterTime}:00`)
+        : new Date();
+
       const clientData: Partial<Client> = {
         ...formData,
         contacts: 1, // First encounter
-        last_contact: format(new Date(), 'yyyy-MM-dd HH:mm:ss'),
-        created_at: new Date().toISOString()
+        last_contact: format(encounterDateTime, 'yyyy-MM-dd HH:mm:ss'),
+        date_created: useBackdating ? encounterDate : format(new Date(), 'yyyy-MM-dd'),
+        created_at: useBackdating ? encounterDateTime.toISOString() : new Date().toISOString()
       };
 
       const { data, error: insertError } = await supabase
@@ -126,18 +141,18 @@ const ClientIntake: React.FC<ClientIntakeProps> = ({ user, onClientAdded }) => {
 
       if (insertError) throw insertError;
 
-      // If we have location data, create an initial interaction record
-      if (location && data) {
+      // Create an initial interaction record (with or without location)
+      if (data) {
         const interactionData = {
           client_id: data.id,
           worker_id: user.id,
           worker_name: user.email?.split('@')[0] || 'Unknown Worker',
           interaction_type: 'Initial Intake',
-          notes: `Client intake completed. ${formData.notes ? `Notes: ${formData.notes}` : ''}`.trim(),
-          location_lat: location.latitude,
-          location_lng: location.longitude,
-          interaction_date: new Date().toISOString(),
-          created_at: new Date().toISOString()
+          notes: `Client intake completed${useBackdating ? ` (Backdated to ${format(encounterDateTime, 'PPP p')})` : ''}. ${location ? 'Location captured.' : 'Location not available.'} ${formData.notes ? `Notes: ${formData.notes}` : ''}`.trim(),
+          location_lat: location?.latitude || null,
+          location_lng: location?.longitude || null,
+          interaction_date: encounterDateTime.toISOString(),
+          created_at: useBackdating ? encounterDateTime.toISOString() : new Date().toISOString()
         };
 
         await supabase
@@ -166,6 +181,11 @@ const ClientIntake: React.FC<ClientIntakeProps> = ({ user, onClientAdded }) => {
         contacts: 0,
         date_created: format(new Date(), 'yyyy-MM-dd')
       });
+
+      // Reset backdating fields
+      setUseBackdating(false);
+      setEncounterDate(format(new Date(), 'yyyy-MM-dd'));
+      setEncounterTime(format(new Date(), 'HH:mm'));
 
       onClientAdded?.();
 
@@ -225,10 +245,10 @@ const ClientIntake: React.FC<ClientIntakeProps> = ({ user, onClientAdded }) => {
       </Box>
 
       {/* Location Status */}
-      <Card sx={{ mb: 3, bgcolor: location ? 'success.light' : 'warning.light' }}>
+      <Card sx={{ mb: 3, bgcolor: location ? 'success.light' : locationError.includes('denied') ? 'error.light' : 'warning.light' }}>
         <CardContent sx={{ py: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <LocationIcon />
+            {location ? <LocationIcon /> : <LocationOffIcon />}
             {gettingLocation ? (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CircularProgress size={16} />
@@ -244,20 +264,77 @@ const ClientIntake: React.FC<ClientIntakeProps> = ({ user, onClientAdded }) => {
                 </Typography>
               </Box>
             ) : (
-              <Box>
-                <Typography variant="body2" color="warning.dark">
+              <Box sx={{ width: '100%' }}>
+                <Typography variant="body2" color={locationError.includes('denied') ? 'error.dark' : 'warning.dark'}>
                   {locationError || 'Location not available'}
                 </Typography>
-                <Button
-                  size="small"
-                  onClick={getCurrentLocation}
-                  sx={{ mt: 0.5 }}
-                >
-                  Retry Location
-                </Button>
+                {locationError.includes('denied') ? (
+                  <Alert severity="info" sx={{ mt: 1, fontSize: '0.75rem' }}>
+                    Location was denied. You can still create entries without location data.
+                    To enable location: go to your browser settings and allow location for this site.
+                  </Alert>
+                ) : (
+                  <Button
+                    size="small"
+                    onClick={getCurrentLocation}
+                    sx={{ mt: 0.5 }}
+                  >
+                    Retry Location
+                  </Button>
+                )}
               </Box>
             )}
           </Box>
+        </CardContent>
+      </Card>
+
+      {/* Backdating Option */}
+      <Card sx={{ mb: 2, bgcolor: useBackdating ? 'info.light' : 'grey.50' }}>
+        <CardContent sx={{ py: 2 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={useBackdating}
+                onChange={(e) => setUseBackdating(e.target.checked)}
+                color="primary"
+              />
+            }
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ScheduleIcon />
+                <Typography variant="body2">
+                  Backdate this entry (for encounters that happened in the past)
+                </Typography>
+              </Box>
+            }
+          />
+
+          {useBackdating && (
+            <Box sx={{ mt: 2, display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+              <TextField
+                label="Encounter Date"
+                type="date"
+                value={encounterDate}
+                onChange={(e) => setEncounterDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                sx={{ flex: 1 }}
+              />
+              <TextField
+                label="Encounter Time"
+                type="time"
+                value={encounterTime}
+                onChange={(e) => setEncounterTime(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                sx={{ flex: 1 }}
+              />
+            </Box>
+          )}
+
+          {useBackdating && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              Entry will be recorded as occurring on {format(new Date(`${encounterDate}T${encounterTime}:00`), 'PPP p')}
+            </Alert>
+          )}
         </CardContent>
       </Card>
 

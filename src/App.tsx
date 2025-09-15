@@ -70,6 +70,28 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    // Check URL for confirmation parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const confirmationError = urlParams.get('error');
+    const confirmationErrorDescription = urlParams.get('error_description');
+    
+    if (confirmationError) {
+      setError(confirmationErrorDescription || 'There was an error confirming your email. Please try again or contact support.');
+    }
+    
+    // Check hash for confirmation token
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const type = hashParams.get('type');
+    
+    if (type === 'signup' || type === 'email') {
+      setSuccess('Email confirmed successfully! You can now log in with your credentials.');
+      // Clear the URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +110,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         onLogin(data.user);
       }
     } catch (error: any) {
-      setError(error.message);
+      // Provide clearer error messages for common issues
+      if (error.message.includes('Email not confirmed')) {
+        setError('Please check your email and click the confirmation link before logging in. If you didn\'t receive an email, check your spam folder or contact your administrator.');
+      } else if (error.message.includes('Invalid login credentials')) {
+        setError('Invalid email or password. Please check your credentials and try again. If you\'re a new user, make sure you\'ve confirmed your email first.');
+      } else {
+        setError(error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -117,6 +146,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}
+            </Alert>
+          )}
+          
+          {success && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {success}
             </Alert>
           )}
 
@@ -251,7 +286,22 @@ function App() {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth event:', event);
+      
+      // Handle different auth events
+      if (event === 'SIGNED_IN') {
+        setUser(session?.user ?? null);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      } else if (event === 'USER_UPDATED') {
+        setUser(session?.user ?? null);
+      } else if (event === 'PASSWORD_RECOVERY') {
+        // Handle password recovery if needed
+        console.log('Password recovery event');
+      }
+      
+      // Update user state for all events
       setUser(session?.user ?? null);
     });
 
