@@ -20,6 +20,7 @@ import {
 import { supabase } from './lib/supabase';
 import ClientManagement from './components/ClientManagement';
 import ClientIntake from './components/ClientIntake';
+import ClientIntakeSDRM from './components/ClientIntakeSDRM';
 
 const theme = createTheme({
   palette: {
@@ -212,7 +213,7 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
       case 0:
         return <ClientManagement user={user} key={refreshClients} />;
       case 1:
-        return <ClientIntake user={user} onClientAdded={handleClientAdded} />;
+        return <ClientIntakeSDRM user={user} onClientAdded={handleClientAdded} />;
       default:
         return <ClientManagement user={user} key={refreshClients} />;
     }
