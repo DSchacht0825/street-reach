@@ -228,7 +228,17 @@ ${interaction.notes}
         .order('interaction_date', { ascending: false });
 
       if (error) throw error;
-      setInteractions(data || []);
+
+      // Map database fields to expected format for backward compatibility
+      const mappedInteractions = (data || []).map(interaction => ({
+        ...interaction,
+        worker_name: interaction.outreach_user || interaction.worker_name,
+        interaction_type: interaction.log_type || interaction.interaction_type,
+        location_lat: interaction.latitude || interaction.location_lat,
+        location_lng: interaction.longitude || interaction.location_lng
+      }));
+
+      setInteractions(mappedInteractions);
     } catch (error: any) {
       console.error('Error loading interactions:', error);
     }
