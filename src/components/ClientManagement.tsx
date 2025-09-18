@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogActions,
   List,
-  ListItemText,
   ListItemSecondaryAction,
   IconButton,
   Chip,
@@ -77,10 +76,11 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ user, onSwitchToInt
       const { data, error } = await supabase
         .from('clients')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('contacts', { ascending: false }) // Sort by contacts (interaction count) first
+        .order('created_at', { ascending: false }); // Then by creation date
 
       if (error) throw error;
-      
+
       setClients(data || []);
     } catch (error: any) {
       setError(`Failed to load clients: ${error.message}`);
@@ -228,11 +228,19 @@ ${interaction.notes}
         .from('interactions')
         .select('*')
         .eq('client_id', clientId)
-        .order('interaction_date', { ascending: false });
+        .order('interaction_date', { ascending: false })
+        .limit(1000); // Increased limit to get all interactions
 
       if (error) throw error;
 
       console.log('📝 Raw interactions from database:', data?.length || 0, data);
+
+      // Debug: Log client ID and interaction count for user visibility
+      if (data?.length) {
+        console.log('✅ FOUND', data.length, 'interactions for client', clientId);
+      } else {
+        console.log('❌ NO INTERACTIONS found for client', clientId);
+      }
 
       // Map database fields to expected format for backward compatibility
       const mappedInteractions = (data || []).map(interaction => ({
@@ -378,39 +386,34 @@ ${interaction.notes}
             <React.Fragment key={client.id}>
               <ListItemButton
                 onClick={() => handleClientClick(client)}
+                sx={{ display: 'flex', alignItems: 'flex-start', py: 2 }}
               >
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                      <Typography variant="subtitle1" fontWeight="medium">
-                        {client.first_name} {client.last_name}
-                      </Typography>
-                      {client.aka && (
-                        <Chip
-                          label={`AKA: ${client.aka}`}
-                          size="small"
-                          variant="outlined"
-                          sx={{ fontSize: '0.75rem' }}
-                        />
-                      )}
-                    </Box>
-                  }
-                  secondary={
-                    <Box sx={{ mt: 0.5 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        {client.description || 'No description'}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 0.5 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          Last contact: {client.last_contact ? formatDate(client.last_contact) : 'Never'}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Contacts: {client.contacts || 0}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  }
-                />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
+                    <Typography variant="subtitle1" fontWeight="medium" component="span">
+                      {client.first_name} {client.last_name}
+                    </Typography>
+                    {client.aka && (
+                      <Chip
+                        label={`AKA: ${client.aka}`}
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontSize: '0.75rem' }}
+                      />
+                    )}
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }} component="div">
+                    {client.description || 'No description'}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="caption" color="text.secondary" component="span">
+                      Last contact: {client.last_contact ? formatDate(client.last_contact) : 'Never'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" component="span">
+                      Contacts: {client.contacts || 0}
+                    </Typography>
+                  </Box>
+                </Box>
                 <ListItemSecondaryAction>
                   <IconButton
                     edge="end"
