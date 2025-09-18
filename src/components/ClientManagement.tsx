@@ -90,6 +90,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ user, onSwitchToInt
   };
 
   const handleClientClick = (client: Client) => {
+    console.log('👤 Selected client:', client.first_name, client.last_name, 'ID:', client.id, 'Contacts:', client.contacts);
     setSelectedClient(client);
     setOpenDialog(true);
     loadClientInteractions(client.id!);
@@ -221,6 +222,8 @@ ${interaction.notes}
 
   const loadClientInteractions = async (clientId: string) => {
     try {
+      console.log('🔍 Loading interactions for client ID:', clientId);
+
       const { data, error } = await supabase
         .from('interactions')
         .select('*')
@@ -228,6 +231,8 @@ ${interaction.notes}
         .order('interaction_date', { ascending: false });
 
       if (error) throw error;
+
+      console.log('📝 Raw interactions from database:', data?.length || 0, data);
 
       // Map database fields to expected format for backward compatibility
       const mappedInteractions = (data || []).map(interaction => ({
@@ -238,9 +243,10 @@ ${interaction.notes}
         location_lng: interaction.longitude || interaction.location_lng
       }));
 
+      console.log('✅ Mapped interactions:', mappedInteractions.length, mappedInteractions);
       setInteractions(mappedInteractions);
     } catch (error: any) {
-      console.error('Error loading interactions:', error);
+      console.error('❌ Error loading interactions:', error);
     }
   };
 
