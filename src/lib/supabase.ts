@@ -38,8 +38,8 @@ export type Interaction = {
   worker_name: string
   interaction_type: string
   notes: string
-  location_lat: number
-  location_lng: number
+  location_lat: number | null
+  location_lng: number | null
   interaction_date: string
   created_at?: string
   updated_at?: string
